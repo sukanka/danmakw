@@ -112,7 +112,27 @@ mod imp {
             self.obj().attach_buffers();
 
             let mut renderer = DanmakwAreaRenderer::new();
-            renderer.danmaku_renderer.set_font_name(self.font_name());
+            renderer
+                .danmaku_renderer
+                .set_font_size(*self.font_size.borrow() as f32);
+            renderer
+                .danmaku_renderer
+                .set_row_spacing(*self.row_spacing.borrow() as f32);
+            renderer
+                .danmaku_renderer
+                .set_top_padding(*self.top_padding.borrow() as f32);
+            renderer
+                .danmaku_renderer
+                .set_speed_factor(*self.speed_factor.borrow());
+            renderer
+                .danmaku_renderer
+                .set_max_rows(*self.max_lines.borrow() as usize);
+            renderer
+                .danmaku_renderer
+                .set_top_center_max_lines(*self.top_center_max_lines.borrow() as usize);
+            renderer
+                .danmaku_renderer
+                .set_bottom_center_max_lines(*self.bottom_center_max_lines.borrow() as usize);
             self.renderer.replace(Some(renderer));
         }
 

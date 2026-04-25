@@ -97,6 +97,7 @@ pub struct RendererInner {
     pub line_height: f32,
     pub top_padding: f32,
     pub font_size: f32,
+    pub row_spacing: f32,
     pub font_name: String,
     spacing: f32,
     pub scale_factor: f64,
@@ -356,8 +357,9 @@ impl RendererInner {
         let scroll_max_rows = 20;
         let top_center_max_rows = 10;
         let bottom_center_max_rows = 10;
-        let font_size = 28.0 * scale_factor as f32;
-        let line_height = font_size * 1.4;
+        let font_size = 25.0 * scale_factor as f32;
+        let row_spacing = 5.0 * scale_factor as f32;
+        let line_height = font_size + row_spacing;
         let top_padding = 10.0 * scale_factor as f32;
         let speed_factor = 1.0;
         let spacing = 20.0 * scale_factor as f32;
@@ -393,6 +395,7 @@ impl RendererInner {
             line_height,
             top_padding,
             font_size,
+            row_spacing,
             scale_factor,
             speed_factor,
             top_center_row_occupied,
@@ -408,8 +411,13 @@ impl RendererInner {
         let font_size = self.font_size;
         let metrics = Metrics::new(font_size, self.line_height);
         let mut text_buffer = Buffer::new(&mut self.font_system, metrics);
+        let family = if self.font_name.is_empty() {
+            Family::SansSerif
+        } else {
+            Family::Name(&self.font_name)
+        };
         let text_attrs = Attrs::new()
-            .family(Family::Name(&self.font_name))
+            .family(family)
             .weight(Weight::NORMAL);
 
         text_buffer.set_text(

@@ -85,9 +85,11 @@ impl Renderer {
 
     pub fn set_font_size(&mut self, font_size: f32) {
         self.0.font_size = font_size;
+        self.0.line_height = font_size + self.0.row_spacing;
     }
 
     pub fn set_row_spacing(&mut self, row_spacing: f32) {
+        self.0.row_spacing = row_spacing;
         self.0.line_height = self.0.font_size + row_spacing;
     }
 

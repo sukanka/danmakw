@@ -70,6 +70,7 @@ pub struct RendererInner {
     pub font_size: f32,
     pub font_name: String,
     spacing: f32,
+    pub row_spacing: f32,
     pub scale_factor: f64,
     pub speed_factor: f64,
 
@@ -229,6 +230,7 @@ impl RendererInner {
             bottom_center_row_occupied,
             paused: false,
             spacing,
+            row_spacing: line_height - font_size,
             texture_view: None,
             #[cfg(feature = "export-texture")]
             texture: None,
@@ -289,7 +291,7 @@ impl RendererInner {
         }
 
         for text in self.scroll_danmaku.iter_mut() {
-            text.x += text.velocity_x * delta_time * self.speed_factor as f32;
+            text.x += text.velocity_x * delta_time;
         }
 
         self.scroll_danmaku.retain(|text| text.x + text.width > 0.0);
@@ -338,7 +340,7 @@ impl RendererInner {
             let Color { r, g, b, a } = text.danmaku.color;
             TextArea {
                 buffer: &mut text.buffer,
-                left: text.x,
+                left: text.x.round(),
                 top: top_y,
                 scale: 1.0,
                 bounds: TextBounds::default(),
@@ -459,7 +461,7 @@ impl RendererInner {
             let Color { r, g, b, a } = text.danmaku.color;
             TextArea {
                 buffer: &mut text.buffer,
-                left: text.x,
+                left: text.x.round(),
                 top: top_y,
                 scale: 1.0,
                 bounds: TextBounds::default(),

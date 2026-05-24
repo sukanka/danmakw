@@ -99,6 +99,7 @@ pub struct RendererInner {
     pub font_size: f32,
     pub font_name: String,
     spacing: f32,
+    pub row_spacing: f32,
     pub scale_factor: f64,
     pub speed_factor: f64,
 
@@ -399,6 +400,7 @@ impl RendererInner {
             bottom_center_row_occupied,
             paused: false,
             spacing,
+            row_spacing: line_height - font_size,
             texture_view: None,
             shadow,
         }
@@ -476,7 +478,7 @@ impl RendererInner {
         }
 
         for text in self.scroll_danmaku.iter_mut() {
-            text.x += text.velocity_x * delta_time * self.speed_factor as f32;
+            text.x += text.velocity_x * delta_time;
         }
 
         self.scroll_danmaku.retain(|text| text.x + text.width > 0.0);
@@ -539,7 +541,7 @@ impl RendererInner {
             let Color { r, g, b, a } = text.danmaku.color;
             TextArea {
                 buffer: &mut text.buffer,
-                left: text.x,
+                left: text.x.round(),
                 top: top_y,
                 scale: 1.0,
                 bounds,
@@ -649,5 +651,133 @@ impl RendererInner {
         _ = device.poll(wgpu::PollType::Poll);
 
         Ok(())
+    }
+}
+
+#[cfg(feature = "export-texture")]
+impl RendererInner {
+    pub fn render_to_export_texture(
+        &mut self, device: &wgpu::Device, instance: &wgpu::Instance, queue: &wgpu::Queue,
+        width: u32, height: u32,
+    ) -> Result<ExportTextureBuf, wgpu::SurfaceError> {
+        let target_size = wgpu::Extent3d {
+            width,
+            height,
+            depth_or_array_layers: 1,
+        };
+
+        if self
+            .texture
+            .as_ref()
+            .is_none_or(|tex| tex.size != target_size)
+        {
+            let new_texture = ExportTexture::new(device, instance, target_size);
+            let new_view = new_texture
+                .texture
+                .create_view(&wgpu::TextureViewDescriptor::default());
+
+            self.texture = Some(new_texture);
+            self.texture_view = Some(new_view);
+            self.viewport.update(queue, Resolution { width, height });
+        }
+
+        let texture = self.texture.as_ref().unwrap();
+
+        let scroll_areas = self.scroll_danmaku.iter_mut().map(|text| {
+            let top_y = self.top_padding + (text.row as f32 * self.line_height);
+            let Color { r, g, b, a } = text.danmaku.color;
+            TextArea {
+                buffer: &mut text.buffer,
+                left: text.x.round(),
+                top: top_y,
+                scale: 1.0,
+                bounds: TextBounds::default(),
+                default_color: glyphon::Color::rgba(r, g, b, a),
+                custom_glyphs: &[],
+                shadow: Some(self.shadow),
+            }
+        });
+
+        let top_center_areas = self.top_center_danmaku.iter_mut().map(|text| {
+            let Color { r, g, b, a } = text.danmaku.color;
+            TextArea {
+                buffer: &mut text.buffer,
+                left: (width as f32 - text.width) / 2.0,
+                top: self.top_padding + (text.row as f32 * self.line_height),
+                scale: 1.0,
+                bounds: TextBounds::default(),
+                default_color: glyphon::Color::rgba(r, g, b, a),
+                custom_glyphs: &[],
+                shadow: Some(self.shadow),
+            }
+        });
+
+        let bottom_center_areas = self.bottom_center_danmaku.iter_mut().map(|text| {
+            let Color { r, g, b, a } = text.danmaku.color;
+            TextArea {
+                buffer: &mut text.buffer,
+                left: (width as f32 - text.width) / 2.0,
+                top: height as f32 - self.top_padding - ((text.row + 1) as f32 * self.line_height),
+                scale: 1.0,
+                bounds: TextBounds::default(),
+                default_color: glyphon::Color::rgba(r, g, b, a),
+                custom_glyphs: &[],
+                shadow: Some(self.shadow),
+            }
+        });
+
+        let areas = scroll_areas
+            .chain(top_center_areas)
+            .chain(bottom_center_areas);
+
+        self.text_renderer
+            .prepare(
+                device,
+                queue,
+                &mut self.font_system,
+                &mut self.atlas,
+                &self.viewport,
+                areas,
+                &mut self.swash_cache,
+            )
+            .unwrap();
+
+        let mut encoder = device.create_command_encoder(&CommandEncoderDescriptor {
+            label: Some("Danmaku Render Encoder"),
+        });
+
+        {
+            let mut pass = encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some("Danmaku Render Pass"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: self.texture_view.as_ref().unwrap(),
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        store: wgpu::StoreOp::Store,
+                    },
+                    depth_slice: None,
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+            self.text_renderer
+                .render(&self.atlas, &self.viewport, &mut pass)
+                .unwrap();
+        }
+
+        queue.submit(Some(encoder.finish()));
+
+        device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
+
+        let texture_buf = ExportTextureBuf {
+            fd: texture.fd,
+            row_stride: texture.row_stride,
+            size: texture.size,
+        };
+
+        Ok(texture_buf)
     }
 }
